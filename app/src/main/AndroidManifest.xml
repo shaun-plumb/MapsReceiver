@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher4"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher4_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MapsReceiver">
+<!--        <activity-->
+<!--            android:name=".MainActivity"-->
+<!--            android:exported="true"-->
+<!--            android:theme="@style/Theme.MapsReceiver" >-->
+<!--            <intent-filter>-->
+<!--                <action android:name="android.intent.action.MAIN" />-->
+
+<!--                <category android:name="android.intent.category.LAUNCHER" />-->
+<!--            </intent-filter>-->
+<!--        </activity>-->
+        <activity
+            android:name=".HeadlessShareActivity"
+            android:exported="true"
+            android:label="Receive Text"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter android:label="Receive with MapsReceiver">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+        <service android:name=".FileProcessorService" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>
+
+
