@@ -181,7 +181,7 @@ public class FileProcessorService extends Service {
     }
 
     private String fetchCoordsFromAPI(String urlString) {
-        if ("YOUR_API_KEY_HERE".equals(API_KEY)) {
+        if (API_KEY == null || API_KEY.isEmpty() || "YOUR_API_KEY_HERE".equals(API_KEY)) {
             Log.w(TAG, "API Key not set. Skipping API call.");
             return null;
         }
@@ -190,19 +190,20 @@ public class FileProcessorService extends Service {
             // Extract the hex CID/FID from the URL
             // Format: !1s0x[hex]:0x[hex]
             String decodedUrl = java.net.URLDecoder.decode(urlString, "UTF-8");
-            // Fixed regex: [a-fA-F0-9]
             Pattern p = Pattern.compile("0x[a-fA-F0-9]+:0x([a-fA-F0-9]+)");
             Matcher m = p.matcher(decodedUrl);
             
             if (m.find()) {
                 String fidHex = m.group(1);
                 // Convert the hex FID (second part) to decimal CID
+                // IMPORTANT: We must use the unsigned string representation for the Places API
                 long cidDecimal = Long.parseUnsignedLong(fidHex, 16);
-                Log.d(TAG, "Converted FID " + fidHex + " to decimal CID: " + cidDecimal);
+                String cidString = Long.toUnsignedString(cidDecimal);
+                Log.d(TAG, "Converted FID " + fidHex + " to decimal CID: " + cidString);
 
                 // Use the cid parameter in the Place Details API
                 String apiUrl = "https://maps.googleapis.com/maps/api/place/details/json" +
-                        "?cid=" + cidDecimal +
+                        "?cid=" + cidString +
                         "&fields=geometry,name" +
                         "&key=" + API_KEY;
 
@@ -228,7 +229,7 @@ public class FileProcessorService extends Service {
                         if (mLat.find() && mLon.find()) {
                             return mLat.group(1) + "," + mLon.group(1);
                         } else if (json.contains("ZERO_RESULTS")) {
-                            Log.w(TAG, "Places API returned ZERO_RESULTS for CID: " + cidDecimal);
+                            Log.w(TAG, "Places API returned ZERO_RESULTS for CID: " + cidString);
                         }
                     } else {
                         Log.e(TAG, "Places API Error (" + responseCode + "): " + json);
@@ -245,7 +246,9 @@ public class FileProcessorService extends Service {
 
     private String extractUrl(String text) {
         if (text == null) return null;
-        Pattern pattern = Pattern.compile("https://\\S+");
+        // More robust URL extraction: match https:// up to space, newline, or common delimiters
+        // Avoids trailing punctuation often found in shared text (e.g. "Check this out! https://url")
+        Pattern pattern = Pattern.compile("https://[a-zA-Z0-9./?=&%_\\-]+(?<![.!?,;:])");
         Matcher matcher = pattern.matcher(text);
         if (matcher.find()) {
             return matcher.group();
@@ -255,104 +258,118 @@ public class FileProcessorService extends Service {
 
     private String followRedirects(String urlString) throws Exception {
         String currentUrl = urlString;
-        String mobileUA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36";
+        java.util.Set<String> visited = new java.util.HashSet<>();
+        
+        // Define retry strategies for tricky links (especially goo.gl)
+        String[] userAgents = {
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
+            DESKTOP_USER_AGENT,
+            null // Fallback to no User-Agent
+        };
 
-        for (int i = 0; i < 12; i++) {
-            HttpURLConnection conn = (HttpURLConnection) new URL(currentUrl).openConnection();
-            try {
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                conn.setInstanceFollowRedirects(false);
+        for (int i = 0; i < 15; i++) {
+            if (visited.contains(currentUrl)) {
+                Log.w(TAG, "Redirect loop detected at: " + currentUrl);
+                break;
+            }
+            visited.add(currentUrl);
 
-                // Short links often 404 with Desktop UA or when specific cookies are present
-                if (currentUrl.contains("goo.gl")) {
-                    conn.setRequestProperty("User-Agent", mobileUA);
-                    conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-                } else {
-                    conn.setRequestProperty("User-Agent", DESKTOP_USER_AGENT);
-                    if (currentUrl.contains("google.")) {
-                        conn.setRequestProperty("Cookie", "SOCS=CAISHAgBEhJnd3NfMm9yZF9tYXBzXzIwMjQwNDA3X1JDMxoBZW4gACIBGgA; CONSENT=YES+");
-                    }
+            // Early exit if we already have coordinates in the URL
+            if (!currentUrl.contains("/maps/dir")) {
+                String coords = extractCoords(currentUrl);
+                if (coords != null) {
+                    Log.d(TAG, "Found coordinates in URL: " + coords);
+                    return currentUrl;
                 }
+            }
 
-                conn.connect();
-                int status = conn.getResponseCode();
-                Log.d(TAG, "Hop " + i + " [" + status + "]: " + currentUrl);
+            String nextUrl = null;
+            int status = -1;
 
-                // Handle 404 for short links specifically
-                if (status == 404 && currentUrl.contains("goo.gl")) {
-                    Log.w(TAG, "Short link 404, retrying with platform default...");
-                    conn.disconnect();
-                    HttpURLConnection retryConn = (HttpURLConnection) new URL(currentUrl).openConnection();
-                    retryConn.setInstanceFollowRedirects(true);
-                    retryConn.setConnectTimeout(10000);
-                    retryConn.connect();
-                    int retryStatus = retryConn.getResponseCode();
-                    String redirectedUrl = retryConn.getURL().toString();
-                    retryConn.disconnect();
-                    Log.d(TAG, "Retry result [" + retryStatus + "]: " + redirectedUrl);
-                    if (retryStatus < 400 && !redirectedUrl.equals(currentUrl)) {
-                        return redirectedUrl;
-                    }
-                }
-
-                // Check if coordinates are ALREADY in the URL before continuing
-                // Only exit early for place/point URLs. For routes (/maps/dir), we MUST reach 
-                // the final URL to get the full route data (pb string).
-                if (!currentUrl.contains("/maps/dir")) {
-                    String coords = extractCoords(currentUrl);
-                    if (coords != null) {
-                        Log.d(TAG, "Found coordinates in redirect URL: " + coords);
-                        return currentUrl;
-                    }
-                }
-
-                if (status >= 300 && status < 400) {
-                    String location = conn.getHeaderField("Location");
-                    if (location != null) {
-                        if (location.startsWith("/")) {
-                            URL base = new URL(currentUrl);
-                            location = base.getProtocol() + "://" + base.getHost() + location;
-                        }
-                        currentUrl = location;
-                        continue;
-                    }
-                } else if (status == 200) {
-                    // If we hit a consent page, extract the 'continue' URL
-                    if (currentUrl.contains("consent.google.com")) {
-                        try {
-                            String decoded = java.net.URLDecoder.decode(currentUrl, "UTF-8");
-                            if (decoded.contains("continue=")) {
-                                currentUrl = decoded.split("continue=")[1].split("&")[0];
-                                Log.d(TAG, "Bypassing consent page to: " + currentUrl);
-                                continue;
-                            }
-                        } catch (Exception ignored) {}
+            // Try multiple strategies for each hop if it returns a 404 (common with Google short links)
+            for (int attempt = 0; attempt < userAgents.length; attempt++) {
+                HttpURLConnection conn = (HttpURLConnection) new URL(currentUrl).openConnection();
+                try {
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(10000);
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setUseCaches(false);
+                    
+                    String ua = userAgents[attempt];
+                    if (ua != null) {
+                        conn.setRequestProperty("User-Agent", ua);
                     }
                     
-                    // If the shortener returns 200 (splash page), scan for the real URL
-                    if (currentUrl.contains("maps.app.goo.gl")) {
-                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                if (line.contains("url=")) {
-                                    Pattern p = Pattern.compile("url=([^&\"']+)");
-                                    Matcher m = p.matcher(line);
-                                    if (m.find()) {
-                                        currentUrl = java.net.URLDecoder.decode(m.group(1), "UTF-8");
-                                        Log.d(TAG, "Extracted destination from splash: " + currentUrl);
-                                        break;
+                    // Mimic a real browser more closely
+                    conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
+                    conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
+                    
+                    if (currentUrl.contains("google.")) {
+                        // Consent cookie helps avoid redirects to consent page and 404s
+                        conn.setRequestProperty("Cookie", "SOCS=CAISHAgBEhJnd3NfMm9yZF9tYXBzXzIwMjQwNDA3X1JDMxoBZW4gACIBGgA; CONSENT=YES+");
+                    }
+
+                    status = conn.getResponseCode();
+                    Log.d(TAG, "Hop " + i + " [Status " + status + ", Strategy " + (attempt == 0 ? "Mobile" : (attempt == 1 ? "Desktop" : "None")) + "]: " + currentUrl);
+
+                    // If 404 on a short link, it might be transient or UA-sensitive
+                    if (status == 404 && currentUrl.contains("goo.gl")) {
+                        Log.w(TAG, "Short link 404, waiting and trying next strategy...");
+                        Thread.sleep(500 * (attempt + 1));
+                        continue; // Try next UA
+                    }
+
+                    if (status >= 300 && status < 400) {
+                        nextUrl = conn.getHeaderField("Location");
+                    } else if (status == 200) {
+                        // Handle consent bypass
+                        if (currentUrl.contains("consent.google.com")) {
+                            try {
+                                String decoded = java.net.URLDecoder.decode(currentUrl, "UTF-8");
+                                if (decoded.contains("continue=")) {
+                                    nextUrl = decoded.split("continue=")[1].split("&")[0];
+                                    Log.d(TAG, "Bypassing consent page to: " + nextUrl);
+                                }
+                            } catch (Exception ignored) {}
+                        } 
+                        // Handle meta/javascript redirects in splash pages (common on some mobile links)
+                        else if (currentUrl.contains("maps.app.goo.gl")) {
+                            try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                                String line;
+                                while ((line = reader.readLine()) != null) {
+                                    if (line.contains("url=")) {
+                                        Pattern p = Pattern.compile("url=([^&\"']+)");
+                                        Matcher m = p.matcher(line);
+                                        if (m.find()) {
+                                            nextUrl = java.net.URLDecoder.decode(m.group(1), "UTF-8");
+                                            Log.d(TAG, "Extracted destination from splash: " + nextUrl);
+                                            break;
+                                        }
                                     }
                                 }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Failed to read splash page", e);
                             }
                         }
-                        continue;
                     }
+                    
+                    // If we reach here, we successfully processed this hop (or exhausted retries)
+                    break;
+                } finally {
+                    conn.disconnect();
                 }
-            } finally {
-                conn.disconnect();
             }
-            return currentUrl;
+
+            if (nextUrl != null) {
+                if (nextUrl.startsWith("/")) {
+                    URL base = new URL(currentUrl);
+                    nextUrl = base.getProtocol() + "://" + base.getHost() + nextUrl;
+                }
+                currentUrl = nextUrl;
+            } else {
+                // No more redirects, we've reached the end
+                break;
+            }
         }
         return currentUrl;
     }
