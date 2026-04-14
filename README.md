@@ -56,7 +56,7 @@ This works with my GPS, a Zumo 396, I have no idea whether any other Garmin mode
 
 You're free to use this in any way you want, but I can't offer any support. If you find interesting ways of improving it, I'd like to hear them.
 
-You need a Google Maps API key (with Places API enabled) to use this app [Google APIs](https://mapsplatform.google.com/lp/maps-apis/). 
+You need a Google Maps API key (with Places API enabled) to use this app [ [Google APIs](https://mapsplatform.google.com/lp/maps-apis/) ]. 
 It is required to extract the coordinates for a single place as the shared information only contains a 
 reference that needs to be looked up. The route shares don't need this (yet).
 
