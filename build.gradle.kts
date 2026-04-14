@@ -2,3 +2,4 @@
 plugins {
     alias(libs.plugins.android.application) apply false
 }
+val defaultMinSdkVersion by extra(25)

@@ -20,7 +20,7 @@ android {
 
     defaultConfig {
         applicationId = "com.coderscollective.mapsreceiver"
-        minSdk = 35
+        minSdk { version = release(rootProject.extra["defaultMinSdkVersion"] as Int) }
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
