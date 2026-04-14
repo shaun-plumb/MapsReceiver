@@ -52,6 +52,8 @@ whenever you hit the share link on a place or route in Google Maps.
  (Go dialog)     (Trip Planner)
 ```
 
+For routes, this only sends the waypoints, not the complete route. This makes sense, since the GPS device can do its own routing. It also means that the final route may not be exactly what's shown by Google Maps.
+
 This works with my GPS, a Zumo 396, I have no idea whether any other Garmin models will support this, but you're welcome to try.
 
 You're free to use this in any way you want, but I can't offer any support. If you find interesting ways of improving it, I'd like to hear them.
@@ -64,8 +66,8 @@ If you keep to under 10,000 or so requests, this usage is free. So don't go mad 
 
 ## Features
 
-- **Share Places**: Extract coordinates from Google Maps "Share" links and send them to Garmin as a waypoint.
-- **Share Routes**: Convert Google Maps multi-point routes into GPX files and open them directly in the Garmin app.
+- **Share Places**: Extract coordinates from Google Maps "Share" links, sends them to Smartphone Link as a POI ready to send to the GPS device.
+- **Share Routes**: Convert Google Maps multi-point routes into GPX files, sends them to Smartphone Link ready to be sent to the GPS device's route planner.
 - **Robust Link Handling**:
     - Handles `goo.gl` and `maps.app.goo.gl` short links.
     - Advanced redirection logic with multi-strategy retries (Mobile/Desktop User-Agents) to avoid 404 errors.
@@ -80,7 +82,7 @@ If you keep to under 10,000 or so requests, this usage is free. So don't go mad 
     - The `FileProcessorService` extracts the URL from the shared text.
     - It follows redirects to find the final Google Maps URL.
     - It parses the URL or uses the Places API to find latitude and longitude.
-    - For routes, it decodes the Google Maps internal "pb" string to extract waypoints.
+    - For routes, it decodes the Google Maps internal protobuf string to extract waypoints.
 3. **Dispatch**: The processed data (coordinates or GPX file) is sent to the Garmin app (`com.garmin.android.apps.phonelink`) using a specialized Intent.
 
 ## Setup
