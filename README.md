@@ -1,11 +1,11 @@
 ![](app/src/main/app-logo.png)
 # MapsReceiver
 
-MapsReceiver is a lightweight Android utility designed to bridge the gap between Google Maps and Garmin devices. It intercepts shared locations or routes from Google Maps, processes them, and sends them directly to the Garmin Explore / Garmin Connect app for navigation.
+MapsReceiver is a lightweight Android utility designed to bridge the gap between Google Maps and Garmin devices. It intercepts shared locations or routes from Google Maps, processes them, and sends them directly to the Garmin Smartphone Link app.
 
 ## Background
 
-I started this project because the Garmin (anything but smart) Smartphone link app stopped parsing shared points from Google Maps. 
+I started this project because the Garmin (anything but smart) Smartphone Link app stopped parsing shared points from Google Maps. 
 Obviously Google had changed the format of their URLs and Garmin weren't interested in supporting the app any more. 
 To make matters worse their new apps don't support my GPS.
 Since this was a selling point of the GPS I'd bought only a few years previously I was understandably annoyed at this 
