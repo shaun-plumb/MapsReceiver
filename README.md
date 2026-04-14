@@ -1,4 +1,4 @@
-![](app/src/main/ic_launcher4-playstore.png)
+![](app/src/main/app-logo.png)
 # MapsReceiver
 
 MapsReceiver is a lightweight Android utility designed to bridge the gap between Google Maps and Garmin devices. It intercepts shared locations or routes from Google Maps, processes them, and sends them directly to the Garmin Explore / Garmin Connect app for navigation.
